@@ -1,0 +1,135 @@
+:root {
+  --hintergrund: #12141a;
+  --flaeche: #1c1f28;
+  --flaeche-hell: #262a36;
+  --rand: #343a4a;
+  --text: #e8eaf0;
+  --gedimmt: #9aa1b2;
+  --akzent: #ff5a1f;
+  --gefahr: #e5484d;
+  --erfolg: #30a46c;
+  --bestzeit: #b07cff;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--hintergrund);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+a { color: #6cb6ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 1.8rem; margin: 0.5rem 0 1rem; }
+h2 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+
+.kopf {
+  display: flex; align-items: center; gap: 2rem; padding: 0.75rem 1.5rem;
+  background: var(--flaeche); border-bottom: 3px solid var(--akzent);
+}
+.kopf .logo { font-weight: 800; font-size: 1.3rem; color: var(--text); }
+.kopf nav { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.kopf nav a { color: var(--gedimmt); padding: 0.4rem 0.8rem; border-radius: 6px; }
+.kopf nav a.active, .kopf nav a:hover { color: var(--text); background: var(--flaeche-hell); text-decoration: none; }
+main { padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+
+button, .knopf {
+  display: inline-block; font: inherit; padding: 0.45rem 0.9rem; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--rand); background: var(--flaeche-hell); color: var(--text);
+}
+button:hover:not(:disabled), .knopf:hover { filter: brightness(1.2); text-decoration: none; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.primaer { background: var(--akzent); border-color: var(--akzent); color: #fff; font-weight: 600; }
+.gefahr { border-color: var(--gefahr); color: #ffb3b5; background: transparent; }
+.gefahr.gross { background: var(--gefahr); color: #fff; }
+.gross { font-size: 1.1rem; padding: 0.7rem 1.4rem; }
+
+input, select {
+  font: inherit; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--rand);
+  background: var(--hintergrund); color: var(--text);
+}
+input[type='color'] { padding: 0; width: 3rem; height: 2.2rem; }
+
+table { width: 100%; border-collapse: collapse; background: var(--flaeche); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--rand); }
+th { color: var(--gedimmt); font-weight: 600; font-size: 0.85rem; background: var(--flaeche-hell); }
+.zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.rechts { text-align: right; white-space: nowrap; }
+.rangliste .platz-1 td:first-child { color: gold; font-weight: 700; }
+.rangliste .platz-2 td:first-child { color: silver; font-weight: 700; }
+.rangliste .platz-3 td:first-child { color: #cd7f32; font-weight: 700; }
+.bestzeit { color: var(--bestzeit); font-weight: 700; }
+
+.karte { background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+.formular h2 { margin-top: 0; }
+.felder { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.felder label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; color: var(--gedimmt); }
+.aktionen { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.kopfzeile { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+fieldset.modus { border: 1px solid var(--rand); border-radius: 8px; margin: 0 0 1rem; }
+.auswahl { display: flex; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }
+.meldung { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
+.startnummer { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; background: var(--flaeche-hell); font-weight: 700; }
+.spurfarben { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.spurfarbe { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.85rem; color: var(--gedimmt); }
+.spurpunkt {
+  display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; margin-right: 0.25rem;
+  font-size: 0.75rem; font-weight: 700; color: #000; text-shadow: 0 0 2px #fff;
+}
+
+.gedimmt { color: var(--gedimmt); }
+.klein { font-size: 0.85rem; }
+.hinweis { padding: 0.75rem 1rem; border-radius: 8px; background: #1d3049; border: 1px solid #2f5d8a; margin: 0.75rem 0; }
+.hinweis.fehler { background: #3b1d20; border-color: var(--gefahr); }
+
+.marke { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px; vertical-align: middle; }
+.status-geplant, .status-bereit { background: #2c3445; color: #b8c4dc; }
+.status-laeuft { background: #4a2a12; color: #ffb37a; }
+.status-beendet { background: #183b2b; color: #7ee2a8; }
+
+.kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.kachel { display: flex; flex-direction: column; padding: 1rem; background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; color: var(--text); }
+.kachel .anzahl { font-size: 2rem; font-weight: 800; color: var(--akzent); }
+
+/* Rennleitung */
+.laufwahl { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.laufwahl button { padding: 0.3rem 0.7rem; font-size: 0.9rem; }
+.laufwahl .lauf-beendet { border-color: var(--erfolg); }
+.laufwahl .lauf-laeuft { border-color: var(--akzent); color: var(--akzent); }
+.laufwahl .aktiv { background: var(--text); color: var(--hintergrund); }
+.laufkopf { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.laufkopf h2 { margin-top: 0; }
+.uhr { display: flex; flex-direction: column; align-items: flex-end; background: #000; padding: 0.5rem 1.25rem; border-radius: 10px; border: 1px solid var(--rand); }
+.uhr .ziffern { font-size: 3.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.uhr.knapp .ziffern { color: var(--gefahr); }
+.spuren { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 0.75rem; }
+.spurkarte {
+  position: relative; background: var(--flaeche); border: 3px solid; border-radius: 12px; padding: 0 1rem 1rem;
+  user-select: none; overflow: hidden;
+}
+.spurkarte.klickbar { cursor: pointer; }
+.spurkarte.klickbar:active { transform: scale(0.98); }
+.spurkarte.leer { opacity: 0.5; }
+.spurkopf {
+  display: flex; justify-content: space-between; margin: 0 -1rem 0.75rem; padding: 0.4rem 1rem;
+  color: #000; font-weight: 800; text-shadow: 0 0 3px rgba(255, 255, 255, 0.7);
+}
+.spurkarte .fahrer { font-size: 1.4rem; font-weight: 700; }
+.spurkarte .runden { font-size: 4.5rem; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 0.5rem 0; }
+.spurkarte .runden .ziel { font-size: 1.5rem; color: var(--gedimmt); }
+.spurkarte dl { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 1rem; margin: 0.5rem 0; font-variant-numeric: tabular-nums; }
+.spurkarte dt { color: var(--gedimmt); }
+.spurkarte dd { margin: 0; text-align: right; font-weight: 600; }
+.spurkarte .zurueck { font-size: 0.8rem; padding: 0.2rem 0.6rem; }
+.blitz { animation: blitz 0.6s ease-out; }
+@keyframes blitz { from { color: var(--akzent); transform: scale(1.15); } to { transform: scale(1); } }
+.ampel {
+  position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.75); z-index: 10;
+  font-size: 18rem; font-weight: 900; color: var(--gefahr); pointer-events: none;
+}
+.toast {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); z-index: 20;
+  padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+.toast.fehler { background: var(--gefahr); color: #fff; }
+.toast.info { background: var(--flaeche-hell); border: 1px solid var(--rand); }
+kbd { background: var(--flaeche-hell); border: 1px solid var(--rand); border-radius: 4px; padding: 0 0.35rem; font-size: 0.8rem; }
