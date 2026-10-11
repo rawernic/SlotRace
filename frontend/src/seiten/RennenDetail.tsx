@@ -15,10 +15,14 @@ export function RennenDetail() {
   if (!rennen) return <Laden />
 
   const loeschen = async () => {
-    if (!confirm(`Rennen „${rennen.name}“ mit allen Ergebnissen löschen?`)) return
+    if (!confirm(`„${rennen.name}“ mit allen Ergebnissen löschen?`)) return
     await api.rennen.loeschen(rennen.id)
     navigate('/rennen')
   }
+
+  const training = rennen.modus === 'TRAINING'
+  const offen = rennen.status !== 'BEENDET' && rennen.status !== 'ABGEBROCHEN'
+  const laufName = training ? 'Sitzung' : 'Lauf'
 
   return (
     <section>
@@ -26,7 +30,11 @@ export function RennenDetail() {
       <div className="kopfzeile">
         <h1>{rennen.name} <StatusMarke status={rennen.status} /></h1>
         <div className="aktionen">
-          {rennen.status !== 'BEENDET' && <Link className="knopf primaer" to={`/rennen/${rennen.id}/live`}>Rennleitung öffnen</Link>}
+          {offen && (
+            <Link className="knopf primaer" to={`/rennen/${rennen.id}/live`}>
+              {training ? 'Training öffnen' : rennen.status === 'PAUSIERT' ? 'Rennen fortsetzen' : 'Rennleitung öffnen'}
+            </Link>
+          )}
           {rennen.status === 'GEPLANT' && <Link className="knopf" to={`/rennen/${rennen.id}/bearbeiten`}>Bearbeiten</Link>}
           <button className="gefahr" onClick={loeschen}>Löschen</button>
         </div>
@@ -37,14 +45,14 @@ export function RennenDetail() {
         {' '}· angelegt {formatDatum(rennen.erstelltAm)}
       </p>
 
-      <h2>{rennen.status === 'BEENDET' ? 'Endergebnis' : 'Zwischenstand'}</h2>
-      <ErgebnisTabelle ergebnis={rennen.ergebnis} />
+      <h2>{training ? 'Bestzeiten' : rennen.status === 'BEENDET' ? 'Endergebnis' : 'Zwischenstand'}</h2>
+      <ErgebnisTabelle ergebnis={rennen.ergebnis} training={training} />
 
-      <h2>Laufplan</h2>
+      <h2>{training ? 'Sitzungen' : 'Laufplan'}</h2>
       <table className="laufplan">
         <thead>
           <tr>
-            <th>Lauf</th>
+            <th>{laufName}</th>
             {rennen.bahn.spuren.map((s) => (
               <th key={s.nummer}><span className="spurpunkt" style={{ background: s.farbe }}>{s.nummer}</span> Spur {s.nummer}</th>
             ))}

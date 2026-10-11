@@ -23,7 +23,9 @@ export function RennenTabelle({ rennen }: { rennen: RennenUebersicht[] }) {
             <td><StatusMarke status={r.status} /></td>
             <td>{formatDatum(r.erstelltAm)}</td>
             <td className="rechts">
-              {r.status !== 'BEENDET' && <Link className="knopf primaer" to={`/rennen/${r.id}/live`}>Rennleitung</Link>}
+              {r.status !== 'BEENDET' && r.status !== 'ABGEBROCHEN' && (
+                <Link className="knopf primaer" to={`/rennen/${r.id}/live`}>{r.modus === 'TRAINING' ? 'Training' : 'Rennleitung'}</Link>
+              )}
             </td>
           </tr>
         ))}
@@ -38,7 +40,10 @@ export function RennenListe() {
     <section>
       <div className="kopfzeile">
         <h1>Rennen</h1>
-        <Link className="knopf primaer" to="/rennen/neu">+ Neues Rennen</Link>
+        <div className="aktionen">
+          <Link className="knopf" to="/rennen/neu?modus=TRAINING">+ Training</Link>
+          <Link className="knopf primaer" to="/rennen/neu">+ Neues Rennen</Link>
+        </div>
       </div>
       <Fehler text={fehler} />
       {daten ? <RennenTabelle rennen={daten} /> : <Laden />}

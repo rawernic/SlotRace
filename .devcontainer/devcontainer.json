@@ -1,0 +1,11 @@
+{
+  "name": "SlotRace",
+  "image": "mcr.microsoft.com/vscode/devcontainers/universal:latest",
+  "forwardPorts": [8081, 5173],
+  "portsAttributes": {
+    "8081": { "label": "SlotRace (Docker)" },
+    "5173": { "label": "Frontend (Vite)" }
+  },
+  // Nach jedem (Neu-)Start: Docker-Bridges in den Legacy-Firewallregeln freigeben, sonst erreicht das Backend die DB nicht
+  "postStartCommand": "bash -c 'for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done; for r in \"-i br-+\" \"-o br-+\"; do sudo iptables-legacy -C FORWARD $r -j ACCEPT 2>/dev/null || sudo iptables-legacy -I FORWARD $r -j ACCEPT; done; docker compose up -d --build'"
+}

@@ -15,7 +15,7 @@ export function Start() {
   if (fehler) return <Fehler text={fehler} />
   if (!daten) return <Laden />
 
-  const offen = daten.rennen.filter((r) => r.status !== 'BEENDET')
+  const offen = daten.rennen.filter((r) => r.status !== 'BEENDET' && r.status !== 'ABGEBROCHEN')
   const kacheln = [
     { titel: 'Fahrer', anzahl: daten.fahrer.length, ziel: '/fahrer' },
     { titel: 'Fahrzeuge', anzahl: daten.fahrzeuge.length, ziel: '/fahrzeuge' },
@@ -28,7 +28,10 @@ export function Start() {
     <section>
       <div className="kopfzeile">
         <h1>Willkommen bei SlotRace</h1>
-        <Link className="knopf primaer" to="/rennen/neu">+ Neues Rennen</Link>
+        <div className="aktionen">
+          <Link className="knopf" to="/rennen/neu?modus=TRAINING">+ Training</Link>
+          <Link className="knopf primaer" to="/rennen/neu">+ Neues Rennen</Link>
+        </div>
       </div>
       <div className="kacheln">
         {kacheln.map((k) => (

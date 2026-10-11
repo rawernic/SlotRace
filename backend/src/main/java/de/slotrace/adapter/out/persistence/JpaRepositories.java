@@ -1,5 +1,6 @@
 package de.slotrace.adapter.out.persistence;
 
+import de.slotrace.domain.model.Rennstatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,8 @@ interface RennenJpaRepository extends JpaRepository<RennenEntity, UUID> {
     Optional<RennenEntity> findByIdZumSchreiben(@Param("id") UUID id);
 
     List<RennenEntity> findByMeisterschaftId(UUID meisterschaftId);
+
+    List<RennenEntity> findByBahnIdAndStatus(UUID bahnId, Rennstatus status);
 
     boolean existsByBahnId(UUID bahnId);
 

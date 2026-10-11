@@ -13,6 +13,7 @@ import de.slotrace.domain.model.Bahn;
 import de.slotrace.domain.model.Meldung;
 import de.slotrace.domain.model.Rennen;
 import de.slotrace.domain.model.Rennplanung;
+import de.slotrace.domain.model.Rennstatus;
 import de.slotrace.domain.service.Auswertung;
 import de.slotrace.domain.service.Platzierung;
 import java.time.Clock;
@@ -91,7 +92,11 @@ public class RennenService implements RennenVerwaltung, Renndurchfuehrung {
 
     @Override
     public Rennen starteLauf(UUID rennenId, int laufNummer) {
-        return veraendere(rennenId, r -> r.starteLauf(laufNummer, jetzt()));
+        Instant zeitpunkt = jetzt();
+        return veraendere(rennenId, r -> {
+            pruefeBahnFrei(r, zeitpunkt);
+            r.starteLauf(laufNummer, zeitpunkt);
+        });
     }
 
     @Override
@@ -113,6 +118,47 @@ public class RennenService implements RennenVerwaltung, Renndurchfuehrung {
     @Override
     public Rennen setzeLaufZurueck(UUID rennenId, int laufNummer) {
         return veraendere(rennenId, r -> r.setzeLaufZurueck(laufNummer));
+    }
+
+    @Override
+    public Rennen pausieren(UUID rennenId) {
+        return veraendere(rennenId, r -> r.pausieren(jetzt()));
+    }
+
+    @Override
+    public Rennen abbrechen(UUID rennenId) {
+        return veraendere(rennenId, r -> r.abbrechen(jetzt()));
+    }
+
+    @Override
+    public Rennen beendeTraining(UUID rennenId) {
+        return veraendere(rennenId, r -> r.beendeTraining(jetzt()));
+    }
+
+    @Override
+    public Rennen wechsleBelegung(UUID rennenId, int spurNummer, UUID fahrerId, UUID fahrzeugId) {
+        if (fahrerId != null && fahrerRepository.finde(fahrerId).isEmpty()) {
+            throw new NichtGefundenException("Fahrer", fahrerId);
+        }
+        if (fahrzeugId != null && fahrzeugRepository.finde(fahrzeugId).isEmpty()) {
+            throw new NichtGefundenException("Fahrzeug", fahrzeugId);
+        }
+        return veraendere(rennenId, r -> {
+            Bahn bahn = bahnRepository.finde(r.bahnId()).orElseThrow(() -> new NichtGefundenException("Bahn", r.bahnId()));
+            r.wechsleBelegung(spurNummer, fahrerId, fahrzeugId, bahn.spurAnzahl(), jetzt());
+        });
+    }
+
+    /** Auf einer Bahn kann immer nur ein Rennen gleichzeitig laufen. */
+    private void pruefeBahnFrei(Rennen rennen, Instant zeitpunkt) {
+        for (Rennen anderes : rennenRepository.alleAufBahnMitStatus(rennen.bahnId(), Rennstatus.LAEUFT)) {
+            if (anderes.id().equals(rennen.id())) {
+                continue;
+            }
+            anderes.pruefeZeitablauf(zeitpunkt);
+            Pruefung.regel(anderes.status() != Rennstatus.LAEUFT, "Auf dieser Bahn läuft bereits „" + anderes.name()
+                    + "“ – bitte zuerst pausieren, beenden oder abbrechen");
+        }
     }
 
     private Rennen veraendere(UUID rennenId, Consumer<Rennen> aenderung) {

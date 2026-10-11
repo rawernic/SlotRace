@@ -16,6 +16,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -49,13 +50,26 @@ class LaufEntity {
     static class BelegungEmbeddable {
         int spurNummer;
         UUID teilnehmerId;
+        Instant belegtSeit;
 
         BelegungEmbeddable() {
         }
 
-        BelegungEmbeddable(int spurNummer, UUID teilnehmerId) {
+        BelegungEmbeddable(int spurNummer, UUID teilnehmerId, Instant belegtSeit) {
             this.spurNummer = spurNummer;
             this.teilnehmerId = teilnehmerId;
+            this.belegtSeit = belegtSeit;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof BelegungEmbeddable b && spurNummer == b.spurNummer
+                    && Objects.equals(teilnehmerId, b.teilnehmerId) && Objects.equals(belegtSeit, b.belegtSeit);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(spurNummer, teilnehmerId, belegtSeit);
         }
     }
 }

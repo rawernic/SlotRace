@@ -44,6 +44,11 @@ public final class TestDaten {
                 0, meldungen(teilnehmer)), bahn(spuren), START);
     }
 
+    public static Rennen training(List<Meldung> meldungen, int spuren) {
+        return Rennen.planen(new Rennplanung("Training", null, Rennmodus.TRAINING, null, null, 0, meldungen),
+                bahn(spuren), START);
+    }
+
     public static Instant plusMs(long ms) {
         return START.plusMillis(ms);
     }

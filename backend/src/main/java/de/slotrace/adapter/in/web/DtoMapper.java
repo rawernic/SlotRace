@@ -24,6 +24,7 @@ import de.slotrace.domain.model.Laufstatus;
 import de.slotrace.domain.model.Meisterschaft;
 import de.slotrace.domain.model.Rennen;
 import de.slotrace.domain.model.Rennmodus;
+import de.slotrace.domain.model.Runde;
 import de.slotrace.domain.model.Teilnehmer;
 import de.slotrace.domain.service.Auswertung;
 import de.slotrace.domain.service.MeisterschaftsPlatz;
@@ -110,10 +111,11 @@ class DtoMapper {
 
         List<LaufDto> laeufe = r.laeufe().stream().map(l -> new LaufDto(l.nummer(), l.status(), l.gestartetAm(),
                 l.beendetAm(), geplantesEnde(r, l),
-                Auswertung.laufstand(l).stream().map(s -> new SpurStandDto(s.spurNummer(),
+                Auswertung.laufstand(l, r.modus()).stream().map(s -> new SpurStandDto(s.spurNummer(),
                         bahn.spuren().get(s.spurNummer() - 1).farbe(), s.teilnehmerId(),
                         fahrerName.apply(s.teilnehmerId()), fahrzeugName.apply(s.teilnehmerId()), s.position(),
-                        s.runden(), s.zeitMs(), s.letzteRundeMs(), s.besteRundeMs())).toList())).toList();
+                        s.runden(), s.zeitMs(), s.letzteRundeMs(), s.besteRundeMs(),
+                        l.rundenVon(s.teilnehmerId()).stream().map(Runde::rundenzeitMs).toList())).toList())).toList();
 
         Integer aktuellerLauf = r.laufendeLauf().map(Lauf::nummer)
                 .or(() -> r.laeufe().stream().filter(l -> l.status() == Laufstatus.BEREIT).map(Lauf::nummer).findFirst())

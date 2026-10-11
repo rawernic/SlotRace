@@ -4,6 +4,7 @@ import de.slotrace.application.port.out.RennenRepository;
 import de.slotrace.domain.model.Belegung;
 import de.slotrace.domain.model.Lauf;
 import de.slotrace.domain.model.Rennen;
+import de.slotrace.domain.model.Rennstatus;
 import de.slotrace.domain.model.Runde;
 import de.slotrace.domain.model.Teilnehmer;
 import java.util.ArrayList;
@@ -48,6 +49,11 @@ class RennenPersistenceAdapter implements RennenRepository {
     @Override
     public Optional<Rennen> findeZurBearbeitung(UUID id) {
         return jpa.findByIdZumSchreiben(id).map(RennenPersistenceAdapter::zuDomain);
+    }
+
+    @Override
+    public List<Rennen> alleAufBahnMitStatus(UUID bahnId, Rennstatus status) {
+        return jpa.findByBahnIdAndStatus(bahnId, status).stream().map(RennenPersistenceAdapter::zuDomain).toList();
     }
 
     @Override
@@ -127,7 +133,6 @@ class RennenPersistenceAdapter implements RennenRepository {
         LaufEntity e = new LaufEntity();
         e.id = l.id();
         e.nummer = l.nummer();
-        l.belegungen().forEach(b -> e.belegungen.add(new LaufEntity.BelegungEmbeddable(b.spurNummer(), b.teilnehmerId())));
         aktualisiereLauf(l, e);
         return e;
     }
@@ -136,6 +141,13 @@ class RennenPersistenceAdapter implements RennenRepository {
         e.status = l.status();
         e.gestartetAm = l.gestartetAm();
         e.beendetAm = l.beendetAm();
+        List<LaufEntity.BelegungEmbeddable> belegungen = l.belegungen().stream()
+                .map(b -> new LaufEntity.BelegungEmbeddable(b.spurNummer(), b.teilnehmerId(), b.belegtSeit()))
+                .toList();
+        if (!belegungen.equals(e.belegungen)) {
+            e.belegungen.clear();
+            e.belegungen.addAll(belegungen);
+        }
         abgleichen(e.runden, l.runden(), r -> r.id, Runde::id, RennenPersistenceAdapter::neueRunde, (r, re) -> { });
     }
 
@@ -157,7 +169,7 @@ class RennenPersistenceAdapter implements RennenRepository {
         List<Lauf> laeufe = new ArrayList<>();
         for (LaufEntity l : e.laeufe) {
             List<Belegung> belegungen = l.belegungen.stream()
-                    .map(b -> new Belegung(b.spurNummer, b.teilnehmerId))
+                    .map(b -> new Belegung(b.spurNummer, b.teilnehmerId, b.belegtSeit))
                     .toList();
             List<Runde> runden = l.runden.stream()
                     .map(r -> new Runde(r.id, r.teilnehmerId, r.spurNummer, r.nummer, r.zeitpunkt, r.rundenzeitMs))

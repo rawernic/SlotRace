@@ -31,7 +31,10 @@ final class Dtos {
     record MeisterschaftsPlatzDto(int platz, UUID fahrerId, String fahrerName, int punkte, int siege, int rennen) {
     }
 
-    record MeldungDto(UUID fahrerId, UUID fahrzeugId) {
+    record MeldungDto(UUID fahrerId, UUID fahrzeugId, Integer spurNummer) {
+    }
+
+    record BelegungAnfrage(UUID fahrerId, UUID fahrzeugId) {
     }
 
     record RennenAnfrage(String name, UUID bahnId, UUID meisterschaftId, Rennmodus modus, Integer laufDauerSekunden,
@@ -51,7 +54,8 @@ final class Dtos {
     }
 
     record SpurStandDto(int spurNummer, String farbe, UUID teilnehmerId, String fahrerName, String fahrzeugName,
-                        int position, int runden, long zeitMs, Long letzteRundeMs, Long besteRundeMs) {
+                        int position, int runden, long zeitMs, Long letzteRundeMs, Long besteRundeMs,
+                        List<Long> rundenzeitenMs) {
     }
 
     /** @param endetAm geplantes Ende bei Zeitrennen (sonst {@code null}) */

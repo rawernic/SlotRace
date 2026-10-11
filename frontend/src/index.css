@@ -85,6 +85,8 @@ fieldset.modus { border: 1px solid var(--rand); border-radius: 8px; margin: 0 0 
 .status-geplant, .status-bereit { background: #2c3445; color: #b8c4dc; }
 .status-laeuft { background: #4a2a12; color: #ffb37a; }
 .status-beendet { background: #183b2b; color: #7ee2a8; }
+.status-pausiert { background: #3d3512; color: #f2d36b; }
+.status-abgebrochen { background: #3f1c1c; color: #ff9a9a; }
 
 .kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
 .kachel { display: flex; flex-direction: column; padding: 1rem; background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; color: var(--text); }
@@ -120,6 +122,9 @@ fieldset.modus { border: 1px solid var(--rand); border-radius: 8px; margin: 0 0 
 .spurkarte dt { color: var(--gedimmt); }
 .spurkarte dd { margin: 0; text-align: right; font-weight: 600; }
 .spurkarte .zurueck { font-size: 0.8rem; padding: 0.2rem 0.6rem; }
+.belegungswahl { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+.rundenliste { list-style: none; padding: 0; margin: 0 0 0.5rem; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.rundenliste li { display: flex; justify-content: space-between; }
 .blitz { animation: blitz 0.6s ease-out; }
 @keyframes blitz { from { color: var(--akzent); transform: scale(1.15); } to { transform: scale(1); } }
 .ampel {

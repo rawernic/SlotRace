@@ -53,7 +53,7 @@ class AuswertungTest {
         rennen.starteLauf(1, START);
         rennen.erfasseRunde(1, 2, plusMs(3_000));
 
-        List<SpurStand> stand = Auswertung.laufstand(rennen.lauf(1));
+        List<SpurStand> stand = Auswertung.laufstand(rennen.lauf(1), rennen.modus());
 
         assertThat(stand).extracting(SpurStand::spurNummer).containsExactly(1, 2);
         assertThat(stand).extracting(SpurStand::position).containsExactly(2, 1);

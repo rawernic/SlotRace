@@ -27,7 +27,8 @@ public class Lauf {
                 Instant gestartetAm, Instant beendetAm, List<Runde> runden) {
         this.id = id;
         this.nummer = nummer;
-        this.belegungen = belegungen.stream().sorted(Comparator.comparingInt(Belegung::spurNummer)).toList();
+        this.belegungen = new ArrayList<>(belegungen);
+        this.belegungen.sort(Comparator.comparingInt(Belegung::spurNummer));
         this.status = status;
         this.gestartetAm = gestartetAm;
         this.beendetAm = beendetAm;
@@ -55,6 +56,35 @@ public class Lauf {
         gestartetAm = null;
         beendetAm = null;
         runden.clear();
+        belegungen.replaceAll(b -> new Belegung(b.spurNummer(), b.teilnehmerId()));
+    }
+
+    void belegeSpur(int spurNummer, UUID teilnehmerId, Instant seit) {
+        raeumeSpur(spurNummer);
+        belegungen.add(new Belegung(spurNummer, teilnehmerId, seit));
+        belegungen.sort(Comparator.comparingInt(Belegung::spurNummer));
+    }
+
+    void raeumeSpur(int spurNummer) {
+        belegungen.removeIf(b -> b.spurNummer() == spurNummer);
+    }
+
+    /** Startpunkt der nächsten Runde auf der Spur: Laufstart, letzter Fahrerwechsel oder letzte Runde. */
+    Instant rundenReferenz(int spurNummer) {
+        Instant referenz = gestartetAm;
+        Optional<Instant> wechsel = belegungen.stream()
+                .filter(b -> b.spurNummer() == spurNummer && b.belegtSeit() != null)
+                .map(Belegung::belegtSeit)
+                .findFirst();
+        if (wechsel.isPresent() && wechsel.get().isAfter(referenz)) {
+            referenz = wechsel.get();
+        }
+        for (Runde r : runden) {
+            if (r.spurNummer() == spurNummer && r.zeitpunkt().isAfter(referenz)) {
+                referenz = r.zeitpunkt();
+            }
+        }
+        return referenz;
     }
 
     void rundeHinzufuegen(Runde runde) {
@@ -101,7 +131,7 @@ public class Lauf {
     }
 
     public List<Belegung> belegungen() {
-        return belegungen;
+        return Collections.unmodifiableList(belegungen);
     }
 
     public List<Runde> runden() {

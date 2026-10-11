@@ -29,12 +29,15 @@ export function formatDatum(iso: string): string {
 export const modusText: Record<Rennmodus, string> = {
   ZEITRENNEN: 'Zeitrennen',
   RUNDENRENNEN: 'Rundenrennen',
+  TRAINING: 'Training',
 }
 
 export const rennstatusText: Record<Rennstatus, string> = {
   GEPLANT: 'Geplant',
   LAEUFT: 'Läuft',
+  PAUSIERT: 'Pausiert',
   BEENDET: 'Beendet',
+  ABGEBROCHEN: 'Abgebrochen',
 }
 
 export const laufstatusText: Record<Laufstatus, string> = {
@@ -44,6 +47,7 @@ export const laufstatusText: Record<Laufstatus, string> = {
 }
 
 export function modusBeschreibung(modus: Rennmodus, laufDauerSekunden: number | null, rundenZiel: number | null) {
+  if (modus === 'TRAINING') return 'Training · open End'
   return modus === 'ZEITRENNEN'
     ? `Zeitrennen · ${formatUhr((laufDauerSekunden ?? 0) * 1000).replace(/,\d$/, '')} min pro Lauf`
     : `Rundenrennen · ${rundenZiel} Runden pro Lauf`

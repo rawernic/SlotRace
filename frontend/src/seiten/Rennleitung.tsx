@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
-import { api, type Lauf, type RennenDetail, type SpurStand } from '../api'
+import { api, type Fahrer, type Fahrzeug, type Lauf, type RennenDetail, type SpurStand } from '../api'
 import { ErgebnisTabelle } from '../komponenten/Ergebnis'
 import { Fehler, Laden } from '../komponenten/Hinweis'
 import { StatusMarke } from '../komponenten/Status'
+import { useDaten } from '../komponenten/hooks'
 import { formatUhr, formatZeit, modusBeschreibung } from '../format'
 
 const ABFRAGE_INTERVALL_MS = 500
@@ -27,6 +28,10 @@ export function Rennleitung() {
   const anfrageNr = useRef(0)
   const angewendetNr = useRef(0)
   const meldungTimer = useRef<number | undefined>(undefined)
+  const { daten: stamm } = useDaten(async () => {
+    const [fahrer, fahrzeuge] = await Promise.all([api.fahrer.alle(), api.fahrzeuge.alle()])
+    return { fahrer, fahrzeuge }
+  })
 
   const zeigeMeldung = useCallback((text: string, art: Meldung['art'] = 'fehler') => {
     setMeldung({ text, art })
@@ -57,6 +62,8 @@ export function Rennleitung() {
       if (!aktiv) return
       setVersatzMs(new Date(r.serverZeit).getTime() - Date.now())
       setRennen(r)
+      // im Training folgt die Anzeige automatisch der aktuellen Sitzung
+      if (r.modus === 'TRAINING') return
       setGewaehlterLauf(r.laeufe.find((l) => l.status === 'LAEUFT')?.nummer ?? r.aktuellerLauf ?? r.laeufe.at(-1)?.nummer ?? null)
     }, (e: Error) => setLadeFehler(e.message))
     const abfrage = window.setInterval(() => void ausfuehren(() => api.rennen.hole(id)), ABFRAGE_INTERVALL_MS)
@@ -68,7 +75,9 @@ export function Rennleitung() {
     }
   }, [id, ausfuehren])
 
-  const lauf: Lauf | undefined = rennen?.laeufe.find((l) => l.nummer === gewaehlterLauf)
+  const training = rennen?.modus === 'TRAINING'
+  const abgeschlossen = rennen?.status === 'BEENDET' || rennen?.status === 'ABGEBROCHEN'
+  const lauf: Lauf | undefined = rennen?.laeufe.find((l) => l.nummer === (gewaehlterLauf ?? (training ? rennen.aktuellerLauf : null)))
 
   const runde = useCallback((spur: number) => {
     if (!lauf || lauf.status !== 'LAEUFT') return
@@ -83,7 +92,7 @@ export function Rennleitung() {
   }, [ausfuehren, id, lauf, zeigeMeldung])
 
   const starten = useCallback(() => {
-    if (!lauf || lauf.status !== 'BEREIT' || ampel !== null) return
+    if (!lauf || lauf.status !== 'BEREIT' || ampel !== null || rennen?.status === 'ABGEBROCHEN') return
     if (rennen?.laeufe.some((l) => l.status === 'LAEUFT')) {
       zeigeMeldung('Es läuft bereits ein anderer Lauf')
       return
@@ -104,14 +113,41 @@ export function Rennleitung() {
 
   const beenden = useCallback(() => {
     if (!lauf || lauf.status !== 'LAEUFT') return
+    if (training) {
+      void ausfuehren(() => api.rennen.beendeLauf(id, lauf.nummer)).then((r) => { if (r) setGewaehlterLauf(null) })
+      return
+    }
     if (!confirm(`Lauf ${lauf.nummer} jetzt beenden?`)) return
     void ausfuehren(() => api.rennen.beendeLauf(id, lauf.nummer))
-  }, [ausfuehren, id, lauf])
+  }, [ausfuehren, id, lauf, training])
 
   const zuruecksetzen = () => {
-    if (!lauf || !confirm(`Lauf ${lauf.nummer} zurücksetzen? Alle Runden dieses Laufs werden gelöscht.`)) return
+    const was = training ? `Sitzung ${lauf?.nummer} verwerfen` : `Lauf ${lauf?.nummer} zurücksetzen`
+    if (!lauf || !confirm(`${was}? Alle Runden ${training ? 'dieser Sitzung' : 'dieses Laufs'} werden gelöscht.`)) return
     void ausfuehren(() => api.rennen.setzeLaufZurueck(id, lauf.nummer))
   }
+
+  const pausieren = () => {
+    if (!confirm('Rennen pausieren? Der laufende Lauf wird zurückgesetzt und muss später neu gestartet werden. '
+      + 'Bereits beendete Läufe bleiben erhalten.')) return
+    void ausfuehren(() => api.rennen.pausieren(id))
+  }
+
+  const abbrechen = () => {
+    if (!rennen || !confirm(`„${rennen.name}“ abbrechen? ${training ? 'Das Training' : 'Das Rennen'} kann danach nicht `
+      + 'fortgesetzt werden und zählt nicht für die Meisterschaft.')) return
+    void ausfuehren(() => api.rennen.abbrechen(id))
+  }
+
+  const trainingBeenden = () => {
+    if (!confirm('Training beenden?')) return
+    void ausfuehren(() => api.rennen.beendeTraining(id)).then((r) => {
+      if (r) setGewaehlterLauf(r.laeufe.at(-1)?.nummer ?? null)
+    })
+  }
+
+  const wechsle = (spur: number, fahrerId: string | null, fahrzeugId: string | null) =>
+    void ausfuehren(() => api.rennen.wechsleBelegung(id, spur, fahrerId, fahrzeugId))
 
   useEffect(() => {
     const taste = (e: KeyboardEvent) => {
@@ -139,23 +175,50 @@ export function Rennleitung() {
   const serverJetzt = jetzt + versatzMs
   const naechsterLauf = rennen.laeufe.find((l) => l.status === 'BEREIT' && l.nummer !== lauf?.nummer)
   const besteImLauf = Math.min(...(lauf?.spuren.map((s) => s.besteRundeMs ?? Infinity) ?? [Infinity]))
+  const laufName = training ? 'Sitzung' : 'Lauf'
+  const wechselbar = training && !abgeschlossen && lauf !== undefined && lauf.nummer === rennen.aktuellerLauf
+  const belegteFahrer = new Set(lauf?.spuren.map((s) => fahrerVon(rennen, s)?.fahrerId))
+  const wahl = (spur: number, stand?: SpurStand) => {
+    if (!wechselbar || !stamm) return undefined
+    const t = stand && fahrerVon(rennen, stand)
+    return (
+      <BelegungWahl fahrerId={t?.fahrerId ?? null} fahrzeugId={t?.fahrzeugId ?? null} fahrer={stamm.fahrer}
+        fahrzeuge={stamm.fahrzeuge} belegteFahrer={belegteFahrer}
+        onWechsel={(fahrerId, fahrzeugId) => wechsle(spur, fahrerId, fahrzeugId)} />
+    )
+  }
 
   return (
     <section className="rennleitung">
       <div className="kopfzeile">
         <div>
           <p className="klein"><Link to={`/rennen/${rennen.id}`}>← {rennen.name}</Link></p>
-          <h1>Rennleitung <StatusMarke status={rennen.status} /></h1>
+          <h1>{training ? 'Training' : 'Rennleitung'} <StatusMarke status={rennen.status} /></h1>
           <p className="gedimmt">{modusBeschreibung(rennen.modus, rennen.laufDauerSekunden, rennen.rundenZiel)} · {rennen.bahn.name}</p>
         </div>
-        <button onClick={() => void document.documentElement.requestFullscreen?.()}>Vollbild</button>
+        <div className="aktionen">
+          {!training && rennen.status === 'LAEUFT' && <button onClick={pausieren}>Pausieren</button>}
+          {training && (rennen.status === 'LAEUFT' || rennen.status === 'PAUSIERT') && (
+            <button onClick={trainingBeenden}>Training beenden</button>
+          )}
+          {!abgeschlossen && <button className="gefahr" onClick={abbrechen}>Abbrechen</button>}
+          <button onClick={() => void document.documentElement.requestFullscreen?.()}>Vollbild</button>
+        </div>
       </div>
 
-      <nav className="laufwahl" aria-label="Läufe">
+      {rennen.status === 'PAUSIERT' && (
+        <div className="hinweis">
+          {training ? 'Das Training' : 'Das Rennen'} ist pausiert, die Bahn ist frei für andere Rennen. Zum Fortsetzen
+          {training ? ' die nächste Sitzung' : ' den nächsten Lauf'} starten.
+        </div>
+      )}
+      {rennen.status === 'ABGEBROCHEN' && <div className="hinweis">Dieses Rennen wurde abgebrochen.</div>}
+
+      <nav className="laufwahl" aria-label={training ? 'Sitzungen' : 'Läufe'}>
         {rennen.laeufe.map((l) => (
           <button key={l.nummer} className={`lauf-${l.status.toLowerCase()} ${l.nummer === lauf?.nummer ? 'aktiv' : ''}`}
             onClick={() => setGewaehlterLauf(l.nummer)}>
-            Lauf {l.nummer}
+            {laufName} {l.nummer}
           </button>
         ))}
       </nav>
@@ -164,17 +227,30 @@ export function Rennleitung() {
         <>
           <div className="laufkopf">
             <div>
-              <h2>Lauf {lauf.nummer} von {rennen.laeufe.length} <StatusMarke status={lauf.status} art="lauf" /></h2>
-              <div className="aktionen">
-                {lauf.status === 'BEREIT' && <button className="primaer gross" onClick={starten} disabled={ampel !== null}>Start (Leertaste)</button>}
-                {lauf.status === 'LAEUFT' && <button className="gefahr gross" onClick={beenden}>Lauf beenden (Esc)</button>}
-                {lauf.status !== 'BEREIT' && <button onClick={zuruecksetzen}>Lauf zurücksetzen</button>}
-                {lauf.status === 'BEENDET' && naechsterLauf && (
-                  <button className="primaer gross" onClick={() => setGewaehlterLauf(naechsterLauf.nummer)}>
-                    Weiter zu Lauf {naechsterLauf.nummer} →
-                  </button>
-                )}
-              </div>
+              <h2>
+                {laufName} {lauf.nummer}{!training && <> von {rennen.laeufe.length}</>} <StatusMarke status={lauf.status} art="lauf" />
+              </h2>
+              {rennen.status !== 'ABGEBROCHEN' && (
+                <div className="aktionen">
+                  {lauf.status === 'BEREIT' && <button className="primaer gross" onClick={starten} disabled={ampel !== null}>Start (Leertaste)</button>}
+                  {lauf.status === 'LAEUFT' && (
+                    <button className={`${training ? '' : 'gefahr '}gross`} onClick={beenden}>
+                      {training ? 'Pause (Esc)' : 'Lauf beenden (Esc)'}
+                    </button>
+                  )}
+                  {lauf.status !== 'BEREIT' && (!training || wechselbar) && (
+                    <button onClick={zuruecksetzen}>{training ? 'Sitzung verwerfen' : 'Lauf zurücksetzen'}</button>
+                  )}
+                  {training && lauf.nummer !== rennen.aktuellerLauf && rennen.aktuellerLauf !== null && (
+                    <button className="primaer gross" onClick={() => setGewaehlterLauf(null)}>Zur aktuellen Sitzung →</button>
+                  )}
+                  {!training && lauf.status === 'BEENDET' && naechsterLauf && (
+                    <button className="primaer gross" onClick={() => setGewaehlterLauf(naechsterLauf.nummer)}>
+                      Weiter zu Lauf {naechsterLauf.nummer} →
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <Uhr rennen={rennen} lauf={lauf} jetzt={serverJetzt} />
           </div>
@@ -187,25 +263,65 @@ export function Rennleitung() {
               const stand = lauf.spuren.find((s) => s.spurNummer === spur.nummer)
               return stand ? (
                 <SpurKarte key={spur.nummer} stand={stand} rundenZiel={rennen.rundenZiel} aktiv={lauf.status === 'LAEUFT'}
-                  besteImLauf={besteImLauf} onRunde={() => runde(spur.nummer)} onZurueck={() => rundeZurueck(spur.nummer)} />
+                  besteImLauf={besteImLauf} training={training} wahl={wahl(spur.nummer, stand)}
+                  onRunde={() => runde(spur.nummer)} onZurueck={() => rundeZurueck(spur.nummer)} />
               ) : (
-                <div key={spur.nummer} className="spurkarte leer" style={{ borderColor: spur.farbe }}>
+                <div key={spur.nummer} className={`spurkarte ${wechselbar ? '' : 'leer'}`} style={{ borderColor: spur.farbe }}>
                   <div className="spurkopf" style={{ background: spur.farbe }}>Spur {spur.nummer}</div>
                   <p className="gedimmt">nicht belegt</p>
+                  {wahl(spur.nummer)}
                 </div>
               )
             })}
           </div>
           <p className="gedimmt klein">
             Tastatur: <kbd>1</kbd>–<kbd>8</kbd> Runde auf Spur · <kbd>Umschalt</kbd>+Ziffer letzte Runde entfernen ·{' '}
-            <kbd>Leertaste</kbd> Start · <kbd>Esc</kbd> Lauf beenden · Klick auf eine Spur zählt ebenfalls eine Runde
+            <kbd>Leertaste</kbd> Start · <kbd>Esc</kbd> {training ? 'Pause' : 'Lauf beenden'} · Klick auf eine Spur zählt ebenfalls eine Runde
           </p>
         </>
       )}
 
-      <h2>Gesamtstand</h2>
-      <ErgebnisTabelle ergebnis={rennen.ergebnis} />
+      <h2>{training ? 'Bestzeiten' : 'Gesamtstand'}</h2>
+      <ErgebnisTabelle ergebnis={rennen.ergebnis} training={training} />
     </section>
+  )
+}
+
+function fahrerVon(rennen: RennenDetail, stand: SpurStand) {
+  return rennen.teilnehmer.find((t) => t.id === stand.teilnehmerId)
+}
+
+interface BelegungWahlProps {
+  fahrerId: string | null
+  fahrzeugId: string | null
+  fahrer: Fahrer[]
+  fahrzeuge: Fahrzeug[]
+  belegteFahrer: Set<string | undefined>
+  onWechsel: (fahrerId: string | null, fahrzeugId: string | null) => void
+}
+
+/** Auswahl von Fahrer und Fahrzeug einer Spur im Training; wirkt sofort, auch während der Sitzung. */
+function BelegungWahl({ fahrerId, fahrzeugId, fahrer, fahrzeuge, belegteFahrer, onWechsel }: BelegungWahlProps) {
+  return (
+    <div className="belegungswahl" onClick={(e) => e.stopPropagation()}>
+      <select value={fahrerId ?? ''} aria-label="Fahrer" onChange={(e) => {
+        e.currentTarget.blur()
+        onWechsel(e.target.value || null, e.target.value ? fahrzeugId ?? fahrzeuge[0]?.id ?? null : null)
+      }}>
+        <option value="">– frei –</option>
+        {fahrer.filter((f) => f.id === fahrerId || !belegteFahrer.has(f.id)).map((f) => (
+          <option key={f.id} value={f.id}>{f.anzeigename}</option>
+        ))}
+      </select>
+      {fahrerId && (
+        <select value={fahrzeugId ?? ''} aria-label="Fahrzeug" onChange={(e) => {
+          e.currentTarget.blur()
+          onWechsel(fahrerId, e.target.value)
+        }}>
+          {fahrzeuge.map((f) => <option key={f.id} value={f.id}>{f.bezeichnung}</option>)}
+        </select>
+      )}
+    </div>
   )
 }
 
@@ -219,7 +335,7 @@ function Uhr({ rennen, lauf, jetzt }: { rennen: RennenDetail; lauf: Lauf; jetzt:
     beschriftung = 'Restzeit'
     ms = start === null ? dauer : Math.max(0, start + dauer - (ende ?? jetzt))
   } else {
-    beschriftung = 'Laufzeit'
+    beschriftung = rennen.modus === 'TRAINING' ? 'Sitzungszeit' : 'Laufzeit'
     ms = start === null ? 0 : (ende ?? jetzt) - start
   }
   const knapp = rennen.modus === 'ZEITRENNEN' && lauf.status === 'LAEUFT' && ms <= 10_000
@@ -236,11 +352,15 @@ interface SpurKarteProps {
   rundenZiel: number | null
   aktiv: boolean
   besteImLauf: number
+  training: boolean
+  wahl?: ReactNode
   onRunde: () => void
   onZurueck: () => void
 }
 
-function SpurKarte({ stand, rundenZiel, aktiv, besteImLauf, onRunde, onZurueck }: SpurKarteProps) {
+const ANGEZEIGTE_RUNDEN = 5
+
+function SpurKarte({ stand, rundenZiel, aktiv, besteImLauf, training, wahl, onRunde, onZurueck }: SpurKarteProps) {
   const imZiel = rundenZiel !== null && stand.runden >= rundenZiel
   return (
     <div className={`spurkarte ${aktiv && !imZiel ? 'klickbar' : ''}`} style={{ borderColor: stand.farbe }}
@@ -251,6 +371,7 @@ function SpurKarte({ stand, rundenZiel, aktiv, besteImLauf, onRunde, onZurueck }
       </div>
       <div className="fahrer">{stand.fahrerName}</div>
       <div className="gedimmt klein">{stand.fahrzeugName}</div>
+      {wahl}
       <div key={stand.runden} className="runden blitz">
         {stand.runden}
         {rundenZiel !== null && <span className="ziel"> / {rundenZiel}</span>}
@@ -264,6 +385,15 @@ function SpurKarte({ stand, rundenZiel, aktiv, besteImLauf, onRunde, onZurueck }
         </dd>
         <dt>Zeit</dt><dd>{formatZeit(stand.zeitMs)}</dd>
       </dl>
+      {training && stand.rundenzeitenMs.length > 0 && (
+        <ol className="rundenliste" aria-label="Letzte Rundenzeiten">
+          {stand.rundenzeitenMs.map((ms, i) => ({ ms, nr: i + 1 })).slice(-ANGEZEIGTE_RUNDEN).reverse().map(({ ms, nr }) => (
+            <li key={nr} className={ms === stand.besteRundeMs ? 'bestzeit' : ''}>
+              <span className="gedimmt">R{nr}</span> {formatZeit(ms)}
+            </li>
+          ))}
+        </ol>
+      )}
       <button className="zurueck" onClick={(e) => { e.stopPropagation(); onZurueck() }} title="Letzte Runde entfernen">
         − Runde
       </button>

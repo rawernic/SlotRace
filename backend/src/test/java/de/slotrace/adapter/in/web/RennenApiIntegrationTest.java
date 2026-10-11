@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -115,6 +116,62 @@ class RennenApiIntegrationTest {
                 .andExpect(status().isUnprocessableContent());
         mvc.perform(get("/api/rennen"))
                 .andExpect(jsonPath("$[?(@.id=='" + rennen + "')].beendeteLaeufe").value(2));
+    }
+
+    @Test
+    void trainingMitFahrerwechselUndPauseFuerAnderesRennen() throws Exception {
+        String clara = id(senden("/api/fahrer", """
+                {"vorname":"Clara","nachname":"Gas"}"""));
+        String dirk = id(senden("/api/fahrer", """
+                {"vorname":"Dirk","nachname":"Bremse"}"""));
+        String auto = id(senden("/api/fahrzeuge", """
+                {"bezeichnung":"Mini Cooper"}"""));
+        String auto2 = id(senden("/api/fahrzeuge", """
+                {"bezeichnung":"BMW M1"}"""));
+        String bahn = id(senden("/api/bahnen", """
+                {"name":"Trainingsbahn","spurFarben":["#e53935","#1e88e5"]}"""));
+
+        String training = id(senden("/api/rennen", """
+                {"name":"Freies Training","bahnId":"%s","modus":"TRAINING","mindestRundenzeitMs":0,
+                 "teilnehmer":[{"fahrerId":"%s","fahrzeugId":"%s","spurNummer":2}]}"""
+                .formatted(bahn, clara, auto)));
+        String rennen = id(senden("/api/rennen", """
+                {"name":"Sprint","bahnId":"%s","modus":"RUNDENRENNEN","rundenZiel":5,
+                 "teilnehmer":[{"fahrerId":"%s","fahrzeugId":"%s"}]}""".formatted(bahn, dirk, auto2)));
+
+        aktion(post("/api/rennen/" + training + "/laeufe/1/start"))
+                .andExpect(jsonPath("$.modus").value("TRAINING"))
+                .andExpect(jsonPath("$.laeufe[0].spuren[0].spurNummer").value(2));
+        uhr.vorstellen(Duration.ofSeconds(7));
+        runde("/api/rennen/" + training + "/laeufe/1", 2);
+
+        // Fahrerwechsel w\u00e4hrend der Sitzung
+        aktion(put("/api/rennen/" + training + "/spuren/2").contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"fahrerId":"%s","fahrzeugId":"%s"}""".formatted(dirk, auto2)))
+                .andExpect(jsonPath("$.laeufe[0].spuren[0].fahrerName").value("Dirk Bremse"))
+                .andExpect(jsonPath("$.teilnehmer", hasSize(2)));
+        uhr.vorstellen(Duration.ofSeconds(6));
+        runde("/api/rennen/" + training + "/laeufe/1", 2)
+                .andExpect(jsonPath("$.laeufe[0].spuren[0].letzteRundeMs").value(6000))
+                .andExpect(jsonPath("$.ergebnis[0].fahrerName").value("Dirk Bremse"));
+
+        // Bahn ist belegt, bis das Training pausiert wird
+        mvc.perform(post("/api/rennen/" + rennen + "/laeufe/1/start"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Freies Training")));
+        aktion(post("/api/rennen/" + training + "/pause"))
+                .andExpect(jsonPath("$.status").value("PAUSIERT"))
+                .andExpect(jsonPath("$.aktuellerLauf").value(2));
+        aktion(post("/api/rennen/" + rennen + "/laeufe/1/start"));
+        aktion(post("/api/rennen/" + rennen + "/abbruch"))
+                .andExpect(jsonPath("$.status").value("ABGEBROCHEN"));
+
+        aktion(post("/api/rennen/" + training + "/laeufe/2/start"));
+        aktion(post("/api/rennen/" + training + "/ende"))
+                .andExpect(jsonPath("$.status").value("BEENDET"))
+                .andExpect(jsonPath("$.laeufe", hasSize(2)))
+                .andExpect(jsonPath("$.ergebnis", hasSize(2)));
     }
 
     @Test

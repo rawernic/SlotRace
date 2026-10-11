@@ -79,20 +79,31 @@ public class Rennen {
         if (neuerModus == Rennmodus.ZEITRENNEN) {
             dauer = pflicht(p.laufDauerSekunden(), "Laufdauer");
             regel(dauer > 0, "Laufdauer muss größer als 0 sein");
-        } else {
+        } else if (neuerModus == Rennmodus.RUNDENRENNEN) {
             ziel = pflicht(p.rundenZiel(), "Rundenziel");
             regel(ziel > 0, "Rundenziel muss größer als 0 sein");
+        } else {
+            regel(p.meisterschaftId() == null, "Ein Training kann keiner Meisterschaft zugeordnet werden");
         }
         regel(p.mindestRundenzeitMs() >= 0 && p.mindestRundenzeitMs() <= MAX_MINDEST_RUNDENZEIT_MS,
                 "Mindestrundenzeit muss zwischen 0 und " + MAX_MINDEST_RUNDENZEIT_MS + " ms liegen");
         List<Meldung> meldungen = pflicht(p.meldungen(), "Teilnehmer");
         regel(!meldungen.isEmpty(), "Ein Rennen braucht mindestens einen Teilnehmer");
         var fahrer = new HashSet<UUID>();
+        var spuren = new HashSet<Integer>();
         List<Teilnehmer> neueTeilnehmer = new ArrayList<>();
+        List<Belegung> trainingsBelegung = new ArrayList<>();
         for (int i = 0; i < meldungen.size(); i++) {
             Meldung m = pflicht(meldungen.get(i), "Teilnehmer");
             regel(fahrer.add(pflicht(m.fahrerId(), "Fahrer")), "Ein Fahrer darf nur einmal pro Rennen starten");
-            neueTeilnehmer.add(new Teilnehmer(UUID.randomUUID(), m.fahrerId(), pflicht(m.fahrzeugId(), "Fahrzeug"), i + 1));
+            Teilnehmer t = new Teilnehmer(UUID.randomUUID(), m.fahrerId(), pflicht(m.fahrzeugId(), "Fahrzeug"), i + 1);
+            neueTeilnehmer.add(t);
+            if (neuerModus == Rennmodus.TRAINING) {
+                int spur = pflicht(m.spurNummer(), "Spur");
+                pruefeSpur(spur, bahn.spurAnzahl());
+                regel(spuren.add(spur), "Spur " + spur + " ist doppelt belegt");
+                trainingsBelegung.add(new Belegung(spur, t.id()));
+            }
         }
 
         this.name = neuerName;
@@ -103,26 +114,32 @@ public class Rennen {
         this.rundenZiel = ziel;
         this.mindestRundenzeitMs = p.mindestRundenzeitMs();
         this.teilnehmer = List.copyOf(neueTeilnehmer);
-        List<List<Belegung>> plan = Laufplan.erzeuge(teilnehmer, bahn.spurAnzahl());
         this.laeufe = new ArrayList<>();
+        if (neuerModus == Rennmodus.TRAINING) {
+            laeufe.add(Lauf.neu(1, trainingsBelegung));
+            return;
+        }
+        List<List<Belegung>> plan = Laufplan.erzeuge(teilnehmer, bahn.spurAnzahl());
         for (int i = 0; i < plan.size(); i++) {
             laeufe.add(Lauf.neu(i + 1, plan.get(i)));
         }
     }
 
     public void starteLauf(int laufNummer, Instant jetzt) {
-        regel(status != Rennstatus.BEENDET, "Das Rennen ist bereits beendet");
+        pruefeNichtAbgeschlossen();
         pruefeZeitablauf(jetzt);
         laufendeLauf().ifPresent(l -> {
             throw new RegelVerletzungException("Lauf " + l.nummer() + " läuft noch");
         });
         Lauf lauf = lauf(laufNummer);
         regel(lauf.status() == Laufstatus.BEREIT, "Lauf " + laufNummer + " wurde bereits gefahren");
+        regel(!lauf.belegungen().isEmpty(), "Es ist keine Spur belegt");
         lauf.starten(jetzt);
         status = Rennstatus.LAEUFT;
     }
 
     public Runde erfasseRunde(int laufNummer, int spurNummer, Instant jetzt) {
+        pruefeNichtAbgebrochen();
         pruefeZeitablauf(jetzt);
         Lauf lauf = lauf(laufNummer);
         regel(lauf.status() == Laufstatus.LAEUFT, "Lauf " + laufNummer + " läuft nicht");
@@ -132,8 +149,7 @@ public class Rennen {
         if (modus == Rennmodus.RUNDENRENNEN) {
             regel(bisher.size() < rundenZiel, "Spur " + spurNummer + " hat das Rundenziel bereits erreicht");
         }
-        Instant referenz = bisher.isEmpty() ? lauf.gestartetAm() : bisher.getLast().zeitpunkt();
-        long rundenzeit = Duration.between(referenz, jetzt).toMillis();
+        long rundenzeit = Duration.between(lauf.rundenReferenz(spurNummer), jetzt).toMillis();
         regel(rundenzeit >= mindestRundenzeitMs,
                 "Runde auf Spur " + spurNummer + " zu schnell (" + rundenzeit + " ms) – ignoriert");
 
@@ -148,6 +164,7 @@ public class Rennen {
     }
 
     public void entferneLetzteRunde(int laufNummer, int spurNummer) {
+        pruefeNichtAbgebrochen();
         Lauf lauf = lauf(laufNummer);
         regel(lauf.status() != Laufstatus.BEREIT, "Lauf " + laufNummer + " wurde noch nicht gestartet");
         UUID teilnehmerId = lauf.teilnehmerAufSpur(spurNummer)
@@ -158,6 +175,7 @@ public class Rennen {
     }
 
     public void beendeLauf(int laufNummer, Instant jetzt) {
+        pruefeNichtAbgebrochen();
         boolean abgelaufen = pruefeZeitablauf(jetzt);
         Lauf lauf = lauf(laufNummer);
         if (abgelaufen && lauf.status() == Laufstatus.BEENDET) {
@@ -165,14 +183,117 @@ public class Rennen {
         }
         regel(lauf.status() == Laufstatus.LAEUFT, "Lauf " + laufNummer + " läuft nicht");
         lauf.beenden(jetzt);
+        if (modus == Rennmodus.TRAINING) {
+            neueTrainingssitzung();
+        }
         aktualisiereStatus();
     }
 
     public void setzeLaufZurueck(int laufNummer) {
+        pruefeNichtAbgebrochen();
         Lauf lauf = lauf(laufNummer);
         regel(lauf.status() != Laufstatus.BEREIT, "Lauf " + laufNummer + " wurde noch nicht gestartet");
+        if (modus == Rennmodus.TRAINING) {
+            regel(status != Rennstatus.BEENDET && lauf == laeufe.getLast(),
+                    "Nur die aktuelle Trainingssitzung kann zurückgesetzt werden");
+        }
         lauf.zuruecksetzen();
         aktualisiereStatus();
+    }
+
+    /**
+     * Unterbricht das Rennen, damit die Bahn für ein anderes Rennen frei wird. Ein laufender Lauf
+     * wird zurückgesetzt und später neu gefahren; im Training bleiben die Runden der Sitzung erhalten.
+     */
+    public void pausieren(Instant jetzt) {
+        pruefeZeitablauf(jetzt);
+        regel(status == Rennstatus.LAEUFT, "Nur laufende Rennen können pausiert werden");
+        Optional<Lauf> laufend = laufendeLauf();
+        if (modus == Rennmodus.TRAINING) {
+            laufend.ifPresent(l -> l.beenden(jetzt));
+            neueTrainingssitzung();
+        } else {
+            laufend.ifPresent(Lauf::zuruecksetzen);
+        }
+        status = laeufe.stream().allMatch(l -> l.status() == Laufstatus.BEREIT) ? Rennstatus.GEPLANT : Rennstatus.PAUSIERT;
+    }
+
+    /** Bricht das Rennen endgültig ab; es wird nicht gewertet. */
+    public void abbrechen(Instant jetzt) {
+        pruefeNichtAbgeschlossen();
+        laufendeLauf().ifPresent(l -> l.beenden(jetzt));
+        status = Rennstatus.ABGEBROCHEN;
+    }
+
+    /** Beendet ein Training; nicht gestartete Sitzungen entfallen. */
+    public void beendeTraining(Instant jetzt) {
+        regel(modus == Rennmodus.TRAINING, "Nur ein Training kann jederzeit beendet werden");
+        pruefeNichtAbgeschlossen();
+        regel(laeufe.stream().anyMatch(l -> l.status() != Laufstatus.BEREIT), "Das Training wurde noch nicht gestartet");
+        laufendeLauf().ifPresent(l -> l.beenden(jetzt));
+        laeufe.removeIf(l -> l.status() == Laufstatus.BEREIT);
+        status = Rennstatus.BEENDET;
+    }
+
+    /**
+     * Setzt im Training Fahrer und Fahrzeug einer Spur für die aktuelle Sitzung, auch während sie läuft.
+     * Ohne Fahrer wird die Spur frei. Die nächste Runde zählt ab dem Wechsel.
+     */
+    public void wechsleBelegung(int spurNummer, UUID fahrerId, UUID fahrzeugId, int spurAnzahl, Instant jetzt) {
+        regel(modus == Rennmodus.TRAINING, "Fahrer und Fahrzeuge können nur im Training gewechselt werden");
+        pruefeNichtAbgeschlossen();
+        pruefeSpur(spurNummer, spurAnzahl);
+        Lauf sitzung = laeufe.getLast();
+        if (fahrerId == null) {
+            sitzung.raeumeSpur(spurNummer);
+            return;
+        }
+        pflicht(fahrzeugId, "Fahrzeug");
+        for (Belegung b : sitzung.belegungen()) {
+            if (b.spurNummer() != spurNummer && teilnehmer(b.teilnehmerId()).fahrerId().equals(fahrerId)) {
+                throw new RegelVerletzungException("Der Fahrer fährt bereits auf Spur " + b.spurNummer());
+            }
+        }
+        Teilnehmer neu = teilnehmer.stream()
+                .filter(t -> t.fahrerId().equals(fahrerId) && t.fahrzeugId().equals(fahrzeugId))
+                .findFirst()
+                .orElseGet(() -> neuerTeilnehmer(fahrerId, fahrzeugId));
+        if (sitzung.teilnehmerAufSpur(spurNummer).filter(neu.id()::equals).isPresent()) {
+            return;
+        }
+        sitzung.belegeSpur(spurNummer, neu.id(), sitzung.status() == Laufstatus.LAEUFT ? jetzt : null);
+    }
+
+    private Teilnehmer neuerTeilnehmer(UUID fahrerId, UUID fahrzeugId) {
+        int startnummer = teilnehmer.stream().mapToInt(Teilnehmer::startnummer).max().orElse(0) + 1;
+        Teilnehmer t = new Teilnehmer(UUID.randomUUID(), fahrerId, fahrzeugId, startnummer);
+        List<Teilnehmer> liste = new ArrayList<>(teilnehmer);
+        liste.add(t);
+        teilnehmer = List.copyOf(liste);
+        return t;
+    }
+
+    private void neueTrainingssitzung() {
+        Lauf letzte = laeufe.getLast();
+        if (letzte.status() == Laufstatus.BEENDET) {
+            List<Belegung> belegung = letzte.belegungen().stream()
+                    .map(b -> new Belegung(b.spurNummer(), b.teilnehmerId()))
+                    .toList();
+            laeufe.add(Lauf.neu(letzte.nummer() + 1, belegung));
+        }
+    }
+
+    private static void pruefeSpur(int spurNummer, int spurAnzahl) {
+        regel(spurNummer >= 1 && spurNummer <= spurAnzahl, "Spur " + spurNummer + " existiert auf dieser Bahn nicht");
+    }
+
+    private void pruefeNichtAbgebrochen() {
+        regel(status != Rennstatus.ABGEBROCHEN, "Das Rennen wurde abgebrochen");
+    }
+
+    private void pruefeNichtAbgeschlossen() {
+        pruefeNichtAbgebrochen();
+        regel(status != Rennstatus.BEENDET, "Das Rennen ist bereits beendet");
     }
 
     /**
@@ -203,11 +324,15 @@ public class Rennen {
     }
 
     private void aktualisiereStatus() {
-        if (laeufe.stream().allMatch(l -> l.status() == Laufstatus.BEENDET)) {
-            status = Rennstatus.BEENDET;
-        } else if (laeufe.stream().allMatch(l -> l.status() == Laufstatus.BEREIT)) {
+        if (laeufe.stream().allMatch(l -> l.status() == Laufstatus.BEREIT)) {
             status = Rennstatus.GEPLANT;
-        } else {
+        } else if (laufendeLauf().isPresent()) {
+            status = Rennstatus.LAEUFT;
+        } else if (modus == Rennmodus.TRAINING) {
+            status = status == Rennstatus.BEENDET ? Rennstatus.BEENDET : Rennstatus.PAUSIERT;
+        } else if (laeufe.stream().allMatch(l -> l.status() == Laufstatus.BEENDET)) {
+            status = Rennstatus.BEENDET;
+        } else if (status != Rennstatus.PAUSIERT) {
             status = Rennstatus.LAEUFT;
         }
     }

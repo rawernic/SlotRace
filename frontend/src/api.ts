@@ -1,5 +1,5 @@
-export type Rennmodus = 'ZEITRENNEN' | 'RUNDENRENNEN'
-export type Rennstatus = 'GEPLANT' | 'LAEUFT' | 'BEENDET'
+export type Rennmodus = 'ZEITRENNEN' | 'RUNDENRENNEN' | 'TRAINING'
+export type Rennstatus = 'GEPLANT' | 'LAEUFT' | 'PAUSIERT' | 'BEENDET' | 'ABGEBROCHEN'
 export type Laufstatus = 'BEREIT' | 'LAEUFT' | 'BEENDET'
 
 export interface Fahrer {
@@ -79,6 +79,7 @@ export interface SpurStand {
   zeitMs: number
   letzteRundeMs: number | null
   besteRundeMs: number | null
+  rundenzeitenMs: number[]
 }
 
 export interface Lauf {
@@ -129,7 +130,7 @@ export interface RennenAnfrage {
   laufDauerSekunden: number | null
   rundenZiel: number | null
   mindestRundenzeitMs: number
-  teilnehmer: { fahrerId: string; fahrzeugId: string }[]
+  teilnehmer: { fahrerId: string; fahrzeugId: string; spurNummer?: number | null }[]
 }
 
 export class ApiFehler extends Error {}
@@ -200,5 +201,10 @@ export const api = {
     beendeLauf: (id: string, lauf: number) => post<RennenDetail>(`/rennen/${id}/laeufe/${lauf}/ende`),
     setzeLaufZurueck: (id: string, lauf: number) =>
       post<RennenDetail>(`/rennen/${id}/laeufe/${lauf}/zuruecksetzen`),
+    pausieren: (id: string) => post<RennenDetail>(`/rennen/${id}/pause`),
+    abbrechen: (id: string) => post<RennenDetail>(`/rennen/${id}/abbruch`),
+    beendeTraining: (id: string) => post<RennenDetail>(`/rennen/${id}/ende`),
+    wechsleBelegung: (id: string, spur: number, fahrerId: string | null, fahrzeugId: string | null) =>
+      put<RennenDetail>(`/rennen/${id}/spuren/${spur}`, { fahrerId, fahrzeugId }),
   },
 }

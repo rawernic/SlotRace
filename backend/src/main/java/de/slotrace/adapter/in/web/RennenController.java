@@ -1,5 +1,6 @@
 package de.slotrace.adapter.in.web;
 
+import de.slotrace.adapter.in.web.Dtos.BelegungAnfrage;
 import de.slotrace.adapter.in.web.Dtos.MeldungDto;
 import de.slotrace.adapter.in.web.Dtos.RennenAnfrage;
 import de.slotrace.adapter.in.web.Dtos.RennenDetailDto;
@@ -91,6 +92,26 @@ class RennenController {
         return mapper.detail(durchfuehrung.setzeLaufZurueck(id, nummer));
     }
 
+    @PostMapping("/{id}/pause")
+    RennenDetailDto pausieren(@PathVariable UUID id) {
+        return mapper.detail(durchfuehrung.pausieren(id));
+    }
+
+    @PostMapping("/{id}/abbruch")
+    RennenDetailDto abbrechen(@PathVariable UUID id) {
+        return mapper.detail(durchfuehrung.abbrechen(id));
+    }
+
+    @PostMapping("/{id}/ende")
+    RennenDetailDto beendeTraining(@PathVariable UUID id) {
+        return mapper.detail(durchfuehrung.beendeTraining(id));
+    }
+
+    @PutMapping("/{id}/spuren/{spur}")
+    RennenDetailDto wechsleBelegung(@PathVariable UUID id, @PathVariable int spur, @RequestBody BelegungAnfrage anfrage) {
+        return mapper.detail(durchfuehrung.wechsleBelegung(id, spur, anfrage.fahrerId(), anfrage.fahrzeugId()));
+    }
+
     private static Rennplanung planung(RennenAnfrage a) {
         List<Meldung> meldungen = a.teilnehmer() == null ? null
                 : a.teilnehmer().stream().map(RennenController::meldung).toList();
@@ -100,6 +121,6 @@ class RennenController {
     }
 
     private static Meldung meldung(MeldungDto m) {
-        return m == null ? null : new Meldung(m.fahrerId(), m.fahrzeugId());
+        return m == null ? null : new Meldung(m.fahrerId(), m.fahrzeugId(), m.spurNummer());
     }
 }
